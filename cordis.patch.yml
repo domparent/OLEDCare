@@ -1,0 +1,7 @@
+# OledCare profile layer. `dsh plugin --profile web add` joins this package to
+# the profile's bundle stack through the dsh.bundle.patch manifest field. The
+# single inserted row mounts the plugin; the client module system then scans
+# the mounted row's dsh.client declaration into the browser roster.
+- insert:
+    - id: oled-care
+      name: 'dsh-oled-care'

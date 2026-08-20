@@ -1,0 +1,46 @@
+{
+  "name": "dsh-oled-care",
+  "version": "1.0.0",
+  "description": "OLED burn-in care for the DeepSeek Harness Web GUI: true-black nap screensaver, pure-black surfaces, gamma-aware text dimming with an idle/focus ladder, and slow accent-hue rotation.",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "cordis",
+    "oled",
+    "burn-in",
+    "screensaver"
+  ],
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
+      "platform": "web"
+    }
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml"
+  ],
+  "engines": {
+    "node": "^22.19 || >=24"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/domparent/OLEDCare.git"
+  },
+  "homepage": "https://github.com/domparent/OLEDCare#readme",
+  "bugs": "https://github.com/domparent/OLEDCare/issues"
+}
