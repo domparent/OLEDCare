@@ -1,4 +1,4 @@
-# OledCare
+# OLEDCare
 
 **A DeepSeek Harness plugin (#dsh-plugin) that protects OLED panels during long agent sessions.**
 
