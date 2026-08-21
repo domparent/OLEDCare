@@ -100,8 +100,9 @@ window.__ModuleLoader__.load({
       }
 
       // Ground-truth probe: the theme presenter writes tokens inline on
-      // <body>. Runs only on re-apply — getComputedStyle forces a synchronous
-      // style flush, so it must never run on a timer against a large DOM.
+      // <body>. getComputedStyle forces a synchronous style flush, so this
+      // runs only on a re-apply (settings edits, dim-rung changes, the slow
+      // hue tick) — never on a fast or per-frame timer.
       const probe = () => {
         try {
           if (document.body) {
@@ -215,6 +216,7 @@ window.__ModuleLoader__.load({
           // Preset Off: remove the layer entirely so the shipped theme shows.
           if (tokensDispose !== null) { tokensDispose(); tokensDispose = null }
           probe()
+          emit()
           return
         }
         try {
@@ -225,6 +227,7 @@ window.__ModuleLoader__.load({
           console.error('oled-care: token override failed', String(err))
         }
         probe()
+        emit()
       }
       // Slider drags fire per input tick; trailing-debounce those applies so a
       // drag costs one token restack (and one style-flush probe), not dozens.
@@ -258,13 +261,13 @@ window.__ModuleLoader__.load({
         if (scheme !== undefined && String(scheme) !== lastScheme) applyTokens()
       })
       ctx.effect(() => {
-        const id = setInterval(() => applyTokens(), 5 * 60 * 1000)
+        const id = setInterval(() => { if (state.hue) applyTokens() }, 5 * 60 * 1000)
         return () => clearInterval(id)
       }, 'oled-care: hue rotation tick')
 
       // --- activity tracking + focus sensing for the idle ladder ---
       ctx.effect(() => {
-        const onAct = () => { state.lastAct = Date.now() }
+        const onAct = () => { state.lastAct = Date.now(); reapplyIfDimMoved() }
         const evs = ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart']
         evs.forEach((e) => document.addEventListener(e, onAct, { passive: true }))
         return () => evs.forEach((e) => document.removeEventListener(e, onAct))
@@ -285,7 +288,7 @@ window.__ModuleLoader__.load({
             setNap(true)
             return
           }
-          if (!state.nap) reapplyIfDimMoved()
+          if (!state.nap) { reapplyIfDimMoved(); emit() }
         }, 15000)
         return () => clearInterval(id)
       }, 'oled-care: idle ladder')
@@ -293,30 +296,35 @@ window.__ModuleLoader__.load({
       // --- styles (one owned tag, removed with the plugin fiber) ---
       const CSS = [
         '.oled-nap{position:fixed;inset:0;background:#000;z-index:99999;pointer-events:auto;outline:none;cursor:none;overflow:hidden}',
-        '.oled-nap-clock{position:absolute;color:#2e2e2e;font-size:64px;font-weight:200;user-select:none;animation:oled-drift 90s linear infinite alternate}',
+        '.oled-nap-clock{position:absolute;left:0;top:0;color:#2e2e2e;font-size:64px;font-weight:200;user-select:none;animation:oled-drift 90s linear infinite alternate}',
         '.oled-nap-status{font-size:15px;color:#2a2a2a;margin-top:10px;font-weight:400}',
         '.oled-nap-hint{font-size:13px;color:#242424;margin-top:12px;font-weight:400}',
-        '@keyframes oled-drift{0%{left:5%;top:8%}20%{left:60%;top:15%}40%{left:72%;top:62%}60%{left:30%;top:78%}80%{left:8%;top:44%}100%{left:50%;top:30%}}',
+        '@keyframes oled-drift{0%{transform:translate(5vw,8vh)}20%{transform:translate(60vw,15vh)}40%{transform:translate(72vw,62vh)}60%{transform:translate(30vw,78vh)}80%{transform:translate(8vw,44vh)}100%{transform:translate(50vw,30vh)}}',
         '.oled-nap-button{display:inline-flex;align-items:center;gap:4px;background:transparent;border:none;color:var(--dsw-alias-label-secondary);cursor:pointer;padding:4px 6px;border-radius:6px;font:inherit;font-size:12px;line-height:1}',
         '.oled-nap-button:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}',
         '.oled-page{display:flex;flex-direction:column;gap:22px;padding:4px 0;max-width:680px;color:var(--dsw-alias-label-primary)}',
         '.oled-group{display:flex;flex-direction:column;gap:4px}',
         '.oled-group-title{font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}',
         '.oled-presets{display:flex;gap:10px;flex-wrap:wrap}',
-        '.oled-preset{flex:1;min-width:150px;text-align:left;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:10px 12px;cursor:pointer;color:var(--dsw-alias-label-primary);font:inherit}',
-        '.oled-preset:hover{border-color:var(--dsw-alias-border-l2)}',
-        '.oled-preset.active{border-color:var(--dsw-alias-brand-primary);box-shadow:0 0 0 1px var(--dsw-alias-brand-primary)}',
+        // Our own chrome must not use the surface/border tokens we override —
+        // with pure-black + faint borders active they would be invisible.
+        // color-mix against currentColor stays visible in both schemes.
+        '.oled-preset{flex:1;min-width:150px;text-align:left;background:color-mix(in srgb, currentColor 4%, transparent);border:1px solid color-mix(in srgb, currentColor 14%, transparent);border-radius:8px;padding:10px 12px;cursor:pointer;color:var(--dsw-alias-label-primary);font:inherit}',
+        '.oled-preset:hover{border-color:color-mix(in srgb, currentColor 25%, transparent)}',
+        // Harness brand blue (#5886D1), pinned: --dsw-alias-brand-primary is
+        // hue-rotated by this plugin, so our own chrome must not follow it.
+        '.oled-preset.active{border-color:#5886d1;box-shadow:0 0 0 1px #5886d1}',
         '.oled-preset.static{cursor:default}',
         '.oled-preset-name{font-weight:600;font-size:13px}',
         '.oled-preset-desc{font-size:11px;color:var(--dsw-alias-label-secondary);margin-top:3px}',
-        '.oled-field{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid var(--dsw-alias-border-l1)}',
+        '.oled-field{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid color-mix(in srgb, currentColor 10%, transparent)}',
         '.oled-field:last-child{border-bottom:none}',
         '.oled-field-label{font-size:13px}',
         '.oled-field-desc{font-size:11px;color:var(--dsw-alias-label-secondary);margin-top:2px;max-width:420px}',
-        '.oled-num{width:64px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l1);border-radius:4px;padding:2px 6px}',
+        '.oled-num{width:64px;background:color-mix(in srgb, currentColor 4%, transparent);color:var(--dsw-alias-label-primary);border:1px solid color-mix(in srgb, currentColor 18%, transparent);border-radius:4px;padding:2px 6px}',
         '.oled-slider{display:flex;align-items:center;gap:8px;font-size:13px}',
-        '.oled-slider input[type=range]{width:110px;accent-color:var(--dsw-alias-brand-primary)}',
-        '.oled-diag{padding:10px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;font-size:11px;color:var(--dsw-alias-label-secondary);display:flex;flex-direction:column;gap:3px}',
+        '.oled-slider input[type=range]{width:110px;accent-color:#5886d1}',
+        '.oled-diag{padding:10px;border:1px solid color-mix(in srgb, currentColor 14%, transparent);border-radius:8px;font-size:11px;color:var(--dsw-alias-label-secondary);display:flex;flex-direction:column;gap:3px}',
         '.oled-diag-title{font-weight:600;color:var(--dsw-alias-label-primary)}',
       ].join('\n')
       ctx.effect(() => {
@@ -330,21 +338,14 @@ window.__ModuleLoader__.load({
       // --- nap overlay: the gate subscribes to nothing but our own state;
       // the screen (sessions-store hook, clock interval) exists only while
       // napping, so idle streaming frames cost zero work here. ---
-      function NapScreen(props) {
+      // NapLayout holds the presentation; NapScreenWithSessions is a separate
+      // component so the sessions-store hook is called unconditionally
+      // (a conditional hook call would break React's hook ordering).
+      function NapLayout(props) {
         const pair = React.useState(new Date())
         const now = pair[0]
         const setNow = pair[1]
-        const useSessions = props.useSessions
-        const sessionStatus = useSessions !== undefined && useSessions !== null
-          ? useSessions((list) => {
-              const id = list.current
-              if (id === undefined) return 'no active session'
-              const row = list.byId[id]
-              if (row === undefined) return 'no active session'
-              if (row.pendingInteraction) return 'agent is waiting for your input'
-              return row.running ? 'agent is working' : 'session idle'
-            })
-          : 'no active session'
+        const didFocus = React.useRef(false)
         React.useEffect(() => {
           const id = setInterval(() => setNow(new Date()), 1000)
           return () => clearInterval(id)
@@ -354,7 +355,7 @@ window.__ModuleLoader__.load({
         return h('div', {
           className: 'oled-nap',
           tabIndex: -1,
-          ref: (el) => { if (el) el.focus() },
+          ref: (el) => { if (el && !didFocus.current) { didFocus.current = true; el.focus() } },
           onMouseMove: wake,
           onMouseDown: wake,
           onKeyDown: wake,
@@ -362,10 +363,26 @@ window.__ModuleLoader__.load({
         },
           h('div', { className: 'oled-nap-clock' },
             pad(now.getHours()) + ':' + pad(now.getMinutes()),
-            h('div', { className: 'oled-nap-status' }, String(sessionStatus)),
+            h('div', { className: 'oled-nap-status' }, String(props.sessionStatus)),
             h('div', { className: 'oled-nap-hint' }, 'nap mode — move the mouse or press any key to wake'),
           ),
         )
+      }
+      function NapScreenWithSessions(props) {
+        const sessionStatus = props.useSessions((list) => {
+          const id = list.current
+          if (id === undefined) return 'no active session'
+          const row = list.byId[id]
+          if (row === undefined) return 'no active session'
+          if (row.pendingInteraction) return 'agent is waiting for your input'
+          return row.running ? 'agent is working' : 'session idle'
+        })
+        return h(NapLayout, { sessionStatus: sessionStatus })
+      }
+      function NapScreen(props) {
+        return props.useSessions !== undefined && props.useSessions !== null
+          ? h(NapScreenWithSessions, props)
+          : h(NapLayout, { sessionStatus: 'no active session' })
       }
       function NapOverlay(props) {
         const s = useOledState()
@@ -385,6 +402,25 @@ window.__ModuleLoader__.load({
       }
 
       // --- settings page ---
+      // Local string state while editing so the field can be cleared and
+      // retyped; commits only in-range values, resyncs from state on blur.
+      // Defined at apply scope (not inside SettingsPage) so the component
+      // identity — and its local state — survives settings re-renders.
+      function MinutesInput(props) {
+        const pair = React.useState(String(props.value))
+        const text = pair[0]
+        const setText = pair[1]
+        return h('input', {
+          type: 'number', min: 1, max: 120, value: text, className: 'oled-num',
+          onChange: (e) => {
+            const t = e.target.value
+            setText(t)
+            const n = Number(t)
+            if (t !== '' && Number.isInteger(n) && n >= 1 && n <= 120) props.onCommit(n)
+          },
+          onBlur: () => setText(String(props.value)),
+        })
+      }
       function SettingsPage() {
         const s = useOledState()
         const update = (patch, debounced) => {
@@ -406,10 +442,6 @@ window.__ModuleLoader__.load({
           }),
           h('span', null, value + '%'),
         )
-        const minutes = (value, onChange) => h('input', {
-          type: 'number', min: 1, max: 120, value: value, className: 'oled-num',
-          onChange: (e) => { const n = Number(e.target.value); if (n >= 1 && n <= 120) onChange(n) },
-        })
         const field = (labelText, desc, control) => h('div', { className: 'oled-field' },
           h('div', null,
             h('div', { className: 'oled-field-label' }, labelText),
@@ -450,10 +482,10 @@ window.__ModuleLoader__.load({
           ),
           h('div', { className: 'oled-group' },
             h('div', { className: 'oled-group-title' }, 'Idle & focus'),
-            field('Deep-dim after idle', 'Minutes without input before the deeper intensity applies.', minutes(s.deepDimMin, (v) => update({ deepDimMin: v }))),
+            field('Deep-dim after idle', 'Minutes without input before the deeper intensity applies. Clamped to the nap delay.', h(MinutesInput, { value: s.deepDimMin, onCommit: (v) => update({ deepDimMin: Math.min(v, s.idleMin) }) })),
             field('Deep-dim intensity', 'The dimmer intensity used while idle or unfocused.', slider(s.deepDimPct, 30, (v) => update({ deepDimPct: v }, true))),
             field('Deep-dim when unfocused', 'Apply deep-dim whenever this window loses focus.', checkbox(s.focusDim, (v) => update({ focusDim: v }))),
-            field('Auto nap after idle', 'Minutes without input before the true-black nap screen engages.', minutes(s.idleMin, (v) => update({ idleMin: v }))),
+            field('Auto nap after idle', 'Minutes without input before the true-black nap screen engages. Lowering this also lowers deep-dim.', h(MinutesInput, { value: s.idleMin, onCommit: (v) => update({ idleMin: v, deepDimMin: Math.min(s.deepDimMin, v) }) })),
           ),
           h('div', { className: 'oled-diag' },
             h('div', { className: 'oled-diag-title' }, 'Diagnostics'),
