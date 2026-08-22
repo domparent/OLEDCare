@@ -1,6 +1,6 @@
 {
   "name": "dsh-oled-care",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "OLED burn-in care for the DeepSeek Harness Web GUI: true-black nap screensaver, pure-black surfaces, gamma-aware text dimming with an idle/focus ladder, and slow accent-hue rotation.",
   "keywords": [
     "deepseek-harness",
