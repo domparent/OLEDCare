@@ -1,0 +1,28 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax-check the shipped bundles
+        run: node --check index.js && node --check client.js
+      - name: Verify the dsh.bundle manifest and patch file
+        run: >-
+          node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const patch = pkg.dsh && pkg.dsh.bundle && pkg.dsh.bundle.patch;
+          if (!patch) throw new Error('package.json is missing dsh.bundle.patch');
+          const yml = fs.readFileSync(patch, 'utf8');
+          if (!yml.includes('- insert:')) throw new Error(patch + ' has no insert row');
+          console.log('dsh.bundle.patch -> ' + patch + ' OK');
+          "
