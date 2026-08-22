@@ -434,6 +434,7 @@ window.__ModuleLoader__.load({
           type: 'button',
           className: 'oled-nap-button',
           title: s.nap ? 'Nap mode active' : 'Nap mode: pure black screen to rest OLED pixels',
+          'aria-pressed': s.nap,
           onClick: () => setNap(true),
         }, '☾ Nap')
       }
@@ -449,6 +450,7 @@ window.__ModuleLoader__.load({
         const setText = pair[1]
         return h('input', {
           type: 'number', min: 1, max: 120, value: text, className: 'oled-num',
+          'aria-label': props.label,
           onChange: (e) => {
             const t = e.target.value
             setText(t)
@@ -469,23 +471,25 @@ window.__ModuleLoader__.load({
           emit()
         }
         const applyPreset = (key) => { Object.assign(state, PRESETS[key].patch); state.preset = key; saveSettings(); applyTokens(); emit() }
-        const checkbox = (checked, onChange) => h('input', {
-          type: 'checkbox', checked: checked,
+        const checkbox = (checked, onChange, label) => h('input', {
+          type: 'checkbox', checked: checked, 'aria-label': label,
           onChange: (e) => onChange(e.target.checked),
         })
-        const slider = (value, min, onChange) => h('div', { className: 'oled-slider' },
+        const slider = (value, min, onChange, label) => h('div', { className: 'oled-slider' },
           h('input', {
-            type: 'range', min: min, max: 100, step: 5, value: value,
+            type: 'range', min: min, max: 100, step: 5, value: value, 'aria-label': label,
             onChange: (e) => onChange(Number(e.target.value)),
           }),
           h('span', null, value + '%'),
         )
+        // The control is a factory receiving the field's label text, so each
+        // input's aria-label can never drift from its visible label.
         const field = (labelText, desc, control) => h('div', { className: 'oled-field' },
           h('div', null,
             h('div', { className: 'oled-field-label' }, labelText),
             h('div', { className: 'oled-field-desc' }, desc),
           ),
-          control,
+          control(labelText),
         )
         const presetCard = (key) => h('button', {
           type: 'button',
@@ -513,17 +517,17 @@ window.__ModuleLoader__.load({
           ),
           h('div', { className: 'oled-group' },
             h('div', { className: 'oled-group-title' }, 'Appearance'),
-            field('Pure black backgrounds', 'Every surface goes #000, so background pixels turn fully off.', checkbox(s.blackBg, (v) => update({ blackBg: v }))),
-            field('Fainter static borders', 'Hairline borders sit at the same pixels all day; this dims them further.', checkbox(s.faintBorders, (v) => update({ faintBorders: v }))),
-            field('Text/accent intensity', 'Scales white text and bright accents. Linear-light ratio: perceived contrast is preserved.', slider(s.dimPct, 50, (v) => update({ dimPct: v }, true))),
-            field('Hue rotation', 'Slowly cycles the accent hue (~12h cycle) so static icons wear all subpixels evenly.', checkbox(s.hue, (v) => update({ hue: v }))),
+            field('Pure black backgrounds', 'Every surface goes #000, so background pixels turn fully off.', (label) => checkbox(s.blackBg, (v) => update({ blackBg: v }), label)),
+            field('Fainter static borders', 'Hairline borders sit at the same pixels all day; this dims them further.', (label) => checkbox(s.faintBorders, (v) => update({ faintBorders: v }), label)),
+            field('Text/accent intensity', 'Scales white text and bright accents. Linear-light ratio: perceived contrast is preserved.', (label) => slider(s.dimPct, 50, (v) => update({ dimPct: v }, true), label)),
+            field('Hue rotation', 'Slowly cycles the accent hue (~12h cycle) so static icons wear all subpixels evenly.', (label) => checkbox(s.hue, (v) => update({ hue: v }), label)),
           ),
           h('div', { className: 'oled-group' },
             h('div', { className: 'oled-group-title' }, 'Idle & focus'),
-            field('Deep-dim after idle', 'Minutes without input before the deeper intensity applies. Clamped to the nap delay.', h(MinutesInput, { value: s.deepDimMin, onCommit: (v) => update({ deepDimMin: Math.min(v, s.idleMin) }) })),
-            field('Deep-dim intensity', 'The dimmer intensity used while idle or unfocused.', slider(s.deepDimPct, 30, (v) => update({ deepDimPct: v }, true))),
-            field('Deep-dim when unfocused', 'Apply deep-dim whenever this window loses focus.', checkbox(s.focusDim, (v) => update({ focusDim: v }))),
-            field('Auto nap after idle', 'Minutes without input before the true-black nap screen engages. Lowering this also lowers deep-dim.', h(MinutesInput, { value: s.idleMin, onCommit: (v) => update({ idleMin: v, deepDimMin: Math.min(s.deepDimMin, v) }) })),
+            field('Deep-dim after idle', 'Minutes without input before the deeper intensity applies. Clamped to the nap delay.', (label) => h(MinutesInput, { value: s.deepDimMin, label: label, onCommit: (v) => update({ deepDimMin: Math.min(v, s.idleMin) }) })),
+            field('Deep-dim intensity', 'The dimmer intensity used while idle or unfocused.', (label) => slider(s.deepDimPct, 30, (v) => update({ deepDimPct: v }, true), label)),
+            field('Deep-dim when unfocused', 'Apply deep-dim whenever this window loses focus.', (label) => checkbox(s.focusDim, (v) => update({ focusDim: v }), label)),
+            field('Auto nap after idle', 'Minutes without input before the true-black nap screen engages. Lowering this also lowers deep-dim.', (label) => h(MinutesInput, { value: s.idleMin, label: label, onCommit: (v) => update({ idleMin: v, deepDimMin: Math.min(s.deepDimMin, v) }) })),
           ),
           h('div', { className: 'oled-diag' },
             h('div', { className: 'oled-diag-title' }, 'Diagnostics'),
