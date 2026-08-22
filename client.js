@@ -40,7 +40,8 @@ window.__ModuleLoader__.load({
       const theme = ctx.theme
       const h = React.createElement
 
-      // --- shared in-memory state (the plugin owns no persistence) ---
+      // --- shared state; settings fields persist via localStorage below,
+      // runtime fields (nap, focused, lastAct) stay in memory ---
       const state = {
         nap: false,
         preset: 'balanced',
@@ -69,6 +70,42 @@ window.__ModuleLoader__.load({
           label: 'Maximum', desc: 'Deeper dim at 3 min, nap at 5 min',
           patch: { blackBg: true, faintBorders: true, dimPct: 70, deepDimPct: 45, deepDimMin: 3, focusDim: true, autoNap: true, idleMin: 5, hue: true },
         },
+      }
+
+      // --- persistence: settings live in localStorage only — still no
+      // network, no telemetry, no conversation access. Storage can throw
+      // (private mode, quota), so every access is guarded and falls back to
+      // the in-memory defaults above. ---
+      const STORE_KEY = 'dsh-oled-care:v1'
+      try {
+        const raw = localStorage.getItem(STORE_KEY)
+        const saved = raw ? JSON.parse(raw) : null
+        if (saved && typeof saved === 'object') {
+          for (const k of ['autoNap', 'focusDim', 'faintBorders', 'hue', 'blackBg']) {
+            if (typeof saved[k] === 'boolean') state[k] = saved[k]
+          }
+          if (typeof saved.dimPct === 'number' && saved.dimPct >= 50 && saved.dimPct <= 100) state.dimPct = saved.dimPct
+          if (typeof saved.deepDimPct === 'number' && saved.deepDimPct >= 30 && saved.deepDimPct <= 100) state.deepDimPct = saved.deepDimPct
+          if (Number.isInteger(saved.idleMin) && saved.idleMin >= 1 && saved.idleMin <= 120) state.idleMin = saved.idleMin
+          if (Number.isInteger(saved.deepDimMin) && saved.deepDimMin >= 1 && saved.deepDimMin <= 120) state.deepDimMin = Math.min(saved.deepDimMin, state.idleMin)
+          if (typeof saved.preset === 'string' && (saved.preset in PRESETS || saved.preset === 'custom')) state.preset = saved.preset
+        }
+      } catch (err) { /* storage unreadable — keep defaults */ }
+      const saveSettings = () => {
+        try {
+          localStorage.setItem(STORE_KEY, JSON.stringify({
+            preset: state.preset,
+            autoNap: state.autoNap,
+            idleMin: state.idleMin,
+            deepDimMin: state.deepDimMin,
+            deepDimPct: state.deepDimPct,
+            focusDim: state.focusDim,
+            faintBorders: state.faintBorders,
+            hue: state.hue,
+            blackBg: state.blackBg,
+            dimPct: state.dimPct,
+          }))
+        } catch (err) { /* storage unwritable — settings stay in-memory */ }
       }
 
       // --- self-diagnostics surfaced on the settings page ---
@@ -426,11 +463,12 @@ window.__ModuleLoader__.load({
         const update = (patch, debounced) => {
           Object.assign(state, patch)
           state.preset = 'custom'
+          saveSettings()
           if (debounced === true) scheduleApply()
           else applyTokens()
           emit()
         }
-        const applyPreset = (key) => { Object.assign(state, PRESETS[key].patch); state.preset = key; applyTokens(); emit() }
+        const applyPreset = (key) => { Object.assign(state, PRESETS[key].patch); state.preset = key; saveSettings(); applyTokens(); emit() }
         const checkbox = (checked, onChange) => h('input', {
           type: 'checkbox', checked: checked,
           onChange: (e) => onChange(e.target.checked),
