@@ -61,6 +61,8 @@ Three presets — **Off**, **Balanced** (default: black surfaces, 85% text, nap 
 
 A diagnostics box at the bottom of the settings page shows the live token layer, the resolved body background, the current dim rung, and the nap/idle state.
 
+Settings persist in the browser's `localStorage` (key `dsh-oled-care:v1`), so your preset and custom mix survive `dsh web` restarts. Where storage is unavailable (private windows, blocked storage), the plugin falls back to in-memory settings for the session.
+
 ## How it works
 
 - The package is a profile **bundle**: `dsh.bundle.patch` in `package.json` points at `cordis.patch.yml`, which inserts one plugin row. The client module system scans the row's `dsh.client` declaration into the browser roster and serves `client.js` at `/plugins/dsh-oled-care/client.js`.
@@ -69,10 +71,9 @@ A diagnostics box at the bottom of the settings page shows the live token layer,
 
 ## Limitations
 
-- Settings live in memory: they reset to the Balanced preset when `dsh web` restarts.
 - The light color scheme is left essentially untouched — OLED care targets dark UIs.
 - Developed against dsh `0.1.0-rc.x`. The browser module format (`window.__ModuleLoader__.load`) is an internal harness contract; pin your dsh version or check release notes when upgrading.
-- No network calls, no telemetry, no persistence, no access to conversation content.
+- No network calls, no telemetry, no access to conversation content. The only storage touched is `localStorage`, and only for the plugin's own settings.
 
 ## License
 
