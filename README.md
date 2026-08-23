@@ -8,7 +8,7 @@ OLED burn-in protection for the [DeepSeek Harness](https://github.com/deepseek-a
 
 OLED panels wear where pixels stay lit for hours — exactly what a long agent session does to backgrounds, hairline borders, and bright text. OledCare pushes back on all three:
 
-- **Nap mode** — a true-black (`#000`) full-screen screensaver, so every background pixel switches fully off. It engages automatically after idle minutes, or on demand from the **☾ Nap** button in the session header. A dim drifting clock (so the clock itself does not burn in) shows live agent status — *agent is working / waiting for your input / idle* — and any mouse or key input wakes the screen.
+- **Nap mode** — a true-black (`#000`) full-screen screensaver, so every background pixel switches fully off. It fades in smoothly after idle minutes (with an optional 30-second wind-down), or on demand from the **☾ Nap** button in the session header. A dim drifting clock (so the clock itself does not burn in) shows live agent status — *agent is working / waiting for your input / idle* — and any mouse or key input wakes the screen.
 - **Pure-black surfaces** — every dark-scheme background token goes to `#000000`; background pixels turn fully off instead of glowing dark gray.
 - **Fainter static borders** — hairline dividers sit at the same pixels all day, so their dark values go dimmer than the shipped palette.
 - **Gamma-aware dimming** — white text and bright accent tokens are scaled as a linear-light luminance ratio, so perceived contrast between text shades is preserved while total light output drops.
@@ -60,6 +60,7 @@ Three presets — **Off**, **Balanced** (default: black surfaces, 85% text, nap 
 | Deep-dim intensity | The dimmer level used while idle or unfocused |
 | Deep-dim when unfocused | Apply deep dim whenever the window loses focus |
 | Auto nap after idle | Minutes without input before the nap screen engages |
+| Gradual wind-down | Fades the screen to black over the 30 s before auto-nap engages |
 
 A diagnostics box at the bottom of the settings page shows the live token layer, the resolved body background, the current dim rung, and the nap/idle state.
 

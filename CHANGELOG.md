@@ -4,6 +4,16 @@ All notable changes to OledCare are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Smooth nap transitions: the nap screen now fades in and out over ~0.4 s
+  instead of snapping (instant for `prefers-reduced-motion` users).
+- Optional "Gradual wind-down" setting: the screen fades to black over the
+  30 seconds before auto-nap engages; any input cancels it instantly.
+- Chinese README (`README.zh-CN.md`) with a language switcher in both files.
+
 ## [1.1.0] - 2026-08-22
 
 ### Added

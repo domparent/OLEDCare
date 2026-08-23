@@ -46,6 +46,7 @@ window.__ModuleLoader__.load({
         nap: false,
         preset: 'balanced',
         autoNap: true,
+        windDown: false,
         idleMin: 10,
         deepDimMin: 5,
         deepDimPct: 60,
@@ -81,7 +82,7 @@ window.__ModuleLoader__.load({
         const raw = localStorage.getItem(STORE_KEY)
         const saved = raw ? JSON.parse(raw) : null
         if (saved && typeof saved === 'object') {
-          for (const k of ['autoNap', 'focusDim', 'faintBorders', 'hue', 'blackBg']) {
+          for (const k of ['autoNap', 'windDown', 'focusDim', 'faintBorders', 'hue', 'blackBg']) {
             if (typeof saved[k] === 'boolean') state[k] = saved[k]
           }
           if (typeof saved.dimPct === 'number' && saved.dimPct >= 50 && saved.dimPct <= 100) state.dimPct = saved.dimPct
@@ -96,6 +97,7 @@ window.__ModuleLoader__.load({
           localStorage.setItem(STORE_KEY, JSON.stringify({
             preset: state.preset,
             autoNap: state.autoNap,
+            windDown: state.windDown,
             idleMin: state.idleMin,
             deepDimMin: state.deepDimMin,
             deepDimPct: state.deepDimPct,
@@ -332,7 +334,14 @@ window.__ModuleLoader__.load({
 
       // --- styles (one owned tag, removed with the plugin fiber) ---
       const CSS = [
-        '.oled-nap{position:fixed;inset:0;background:#000;z-index:99999;pointer-events:auto;outline:none;cursor:none;overflow:hidden}',
+        // Nap fades in/out via the oled-visible class; the overlay stays
+        // mounted through the fade-out (see NapOverlay's phase machine).
+        '.oled-nap{position:fixed;inset:0;background:#000;z-index:99999;pointer-events:auto;outline:none;cursor:none;overflow:hidden;opacity:0;transition:opacity .4s ease}',
+        '.oled-nap.oled-visible{opacity:1}',
+        '@media (prefers-reduced-motion: reduce){.oled-nap{transition:none}}',
+        // Wind-down veil: sits just under the nap screen, click-through, ramps
+        // opacity 0 -> 1 with an inline transition set by the WindDown component.
+        '.oled-wind{position:fixed;inset:0;background:#000;z-index:99998;pointer-events:none;opacity:0}',
         '.oled-nap-clock{position:absolute;left:0;top:0;color:#2e2e2e;font-size:64px;font-weight:200;user-select:none;animation:oled-drift 90s linear infinite alternate}',
         '.oled-nap-status{font-size:15px;color:#2a2a2a;margin-top:10px;font-weight:400}',
         '.oled-nap-hint{font-size:13px;color:#242424;margin-top:12px;font-weight:400}',
@@ -400,7 +409,7 @@ window.__ModuleLoader__.load({
         const pad = (n) => String(n).padStart(2, '0')
         const wake = () => setNap(false)
         return h('div', {
-          className: 'oled-nap',
+          className: 'oled-nap' + (props.visible ? ' oled-visible' : ''),
           tabIndex: -1,
           ref: (el) => { if (el && !didFocus.current) { didFocus.current = true; el.focus() } },
           onMouseMove: wake,
@@ -424,17 +433,90 @@ window.__ModuleLoader__.load({
           if (row.pendingInteraction) return 'agent is waiting for your input'
           return row.running ? 'agent is working' : 'session idle'
         })
-        return h(NapLayout, { sessionStatus: sessionStatus })
+        return h(NapLayout, { sessionStatus: sessionStatus, visible: props.visible })
       }
       function NapScreen(props) {
         return props.useSessions !== undefined && props.useSessions !== null
           ? h(NapScreenWithSessions, props)
-          : h(NapLayout, { sessionStatus: 'no active session' })
+          : h(NapLayout, { sessionStatus: 'no active session', visible: props.visible })
       }
+      // Wind-down: in the last 30 s before auto-nap, a click-through black
+      // veil ramps opacity 0 -> 1 with one inline CSS transition (no per-frame
+      // JS). Its own activity listeners force an immediate re-render on input;
+      // the shared onAct handler (registered earlier, so it runs first) has
+      // already reset lastAct by then, so the gate below goes false and the
+      // veil unmounts at once.
+      const WIND_DOWN_MS = 30000
+      function WindDown() {
+        const s = useOledState()
+        const tick = React.useState(0)
+        const force = tick[1]
+        React.useEffect(() => {
+          const onInput = () => force((t) => t + 1)
+          const evs = ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart']
+          evs.forEach((e) => document.addEventListener(e, onInput, { passive: true }))
+          return () => evs.forEach((e) => document.removeEventListener(e, onInput))
+        }, [])
+        const veil = React.useRef(null)
+        const remaining = s.idleMin * 60000 - (Date.now() - s.lastAct)
+        // Stay mounted while napping: without this the veil would unmount the
+        // instant nap engages and flash the undimmed app during the nap
+        // screen's fade-in. Wake resets lastAct, which flips the gate off.
+        const active = s.windDown && s.autoNap && (s.nap || (remaining > 0 && remaining <= WIND_DOWN_MS))
+        // Mount-only ramp ([active] deps): re-renders from the 15 s idle tick
+        // must not touch the inline opacity mid-transition.
+        React.useEffect(() => {
+          if (!active) return
+          const el = veil.current
+          if (!el) return
+          if (s.nap) { el.style.opacity = '1'; return }
+          el.style.opacity = String(Math.max(0, (WIND_DOWN_MS - remaining) / WIND_DOWN_MS))
+          const raf = requestAnimationFrame(() => {
+            el.style.transition = 'opacity ' + remaining + 'ms linear'
+            el.style.opacity = '1'
+          })
+          return () => cancelAnimationFrame(raf)
+        }, [active])
+        if (!active) return null
+        return h('div', { className: 'oled-wind', ref: veil })
+      }
+      // Fade phase machine: the overlay stays mounted through the fade-out so
+      // the CSS opacity transition can play; 'hidden' unmounts it entirely.
+      // Two effects on purpose: the first only flips phases, the second owns
+      // the timers keyed on the phase alone — keying timers on (nap, phase)
+      // would cancel them on the very re-render they trigger.
+      const NAP_FADE_MS = 400
       function NapOverlay(props) {
         const s = useOledState()
-        if (!s.nap) return null
-        return h(NapScreen, props)
+        const pair = React.useState('hidden')
+        const phase = pair[0]
+        const setPhase = pair[1]
+        React.useEffect(() => {
+          if (s.nap) {
+            if (phase === 'hidden') setPhase('entering')
+            else if (phase === 'leaving') setPhase('visible')
+            return
+          }
+          if (phase === 'entering' || phase === 'visible') setPhase('leaving')
+        }, [s.nap, phase])
+        React.useEffect(() => {
+          if (phase === 'entering') {
+            // Double rAF: let the browser paint opacity:0 first, or the
+            // transition to 1 is skipped.
+            const raf = requestAnimationFrame(() => requestAnimationFrame(() => setPhase('visible')))
+            return () => cancelAnimationFrame(raf)
+          }
+          if (phase === 'leaving') {
+            const t = setTimeout(() => setPhase('hidden'), NAP_FADE_MS)
+            return () => clearTimeout(t)
+          }
+        }, [phase])
+        return h(React.Fragment, null,
+          h(WindDown, null),
+          phase === 'hidden'
+            ? null
+            : h(NapScreen, { useSessions: props.useSessions, visible: phase === 'visible' }),
+        )
       }
 
       // --- session header trigger ---
@@ -547,6 +629,7 @@ window.__ModuleLoader__.load({
             field('Deep-dim intensity', 'The dimmer intensity used while idle or unfocused.', (label) => slider(s.deepDimPct, 30, (v) => update({ deepDimPct: v }, true), label)),
             field('Deep-dim when unfocused', 'Apply deep-dim whenever this window loses focus.', (label) => checkbox(s.focusDim, (v) => update({ focusDim: v }), label)),
             field('Auto nap after idle', 'Minutes without input before the true-black nap screen engages. Lowering this also lowers deep-dim.', (label) => h(MinutesInput, { value: s.idleMin, label: label, onCommit: (v) => update({ idleMin: v, deepDimMin: Math.min(s.deepDimMin, v) }) })),
+            field('Gradual wind-down', 'Fades the screen to black over the 30 seconds before auto-nap engages.', (label) => checkbox(s.windDown, (v) => update({ windDown: v }), label)),
           ),
           h('div', { className: 'oled-diag' },
             h('div', { className: 'oled-diag-title' }, 'Diagnostics'),
