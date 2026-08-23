@@ -1,5 +1,7 @@
 # OLEDCare
 
+English · [中文](README.zh-CN.md)
+
 **A DeepSeek Harness plugin (#dsh-plugin) that protects OLED panels during long agent sessions.**
 
 OLED burn-in protection for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web GUI (`dsh web`).
