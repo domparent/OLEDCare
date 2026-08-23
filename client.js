@@ -363,6 +363,16 @@ window.__ModuleLoader__.load({
         '.oled-slider input[type=range]{width:110px;accent-color:#5886d1}',
         '.oled-diag{padding:10px;border:1px solid color-mix(in srgb, currentColor 14%, transparent);border-radius:8px;font-size:11px;color:var(--dsw-alias-label-secondary);display:flex;flex-direction:column;gap:3px}',
         '.oled-diag-title{font-weight:600;color:var(--dsw-alias-label-primary)}',
+        // Sits at the very top of our settings content. The host's header
+        // band (with "Open configuration file") is outside the slot and the
+        // scroll container clips anything pushed above our top edge, so this
+        // is the highest position we can reliably occupy.
+        '.oled-star{font-size:12px;color:var(--dsw-alias-label-secondary)}',
+        '.oled-star a{color:inherit;text-decoration:none;border-bottom:1px dotted color-mix(in srgb, currentColor 40%, transparent)}',
+        '.oled-star a:hover{color:var(--dsw-alias-label-primary)}',
+        '.oled-contact{font-size:12px;color:var(--dsw-alias-label-secondary)}',
+        '.oled-contact a{color:inherit;text-decoration:none;border-bottom:1px dotted color-mix(in srgb, currentColor 40%, transparent)}',
+        '.oled-contact a:hover{color:var(--dsw-alias-label-primary)}',
       ].join('\n')
       ctx.effect(() => {
         const tag = document.createElement('style')
@@ -501,6 +511,15 @@ window.__ModuleLoader__.load({
         )
         const idleFor = Math.round((Date.now() - s.lastAct) / 60000)
         return h('div', { className: 'oled-page' },
+          // Quiet header link — opens the repo in a new tab, no tracking.
+          h('div', { className: 'oled-star' },
+            'Enjoying OLEDCare? ',
+            h('a', {
+              href: 'https://github.com/domparent/OLEDCare',
+              target: '_blank',
+              rel: 'noopener noreferrer',
+            }, '☆ Star it on GitHub'),
+          ),
           h('div', { className: 'oled-group' },
             h('div', { className: 'oled-group-title' }, 'Preset'),
             h('div', { className: 'oled-presets' },
@@ -538,6 +557,17 @@ window.__ModuleLoader__.load({
             h('div', null, 'hue: ' + (s.hue ? 'rotating, now ' + status.hueDeg + '°' : 'off')),
             h('div', null, 'nap: ' + (s.nap ? 'active' : 'off') + ' · idle for ~' + idleFor + ' min (deep-dim at ' + s.deepDimMin + ', nap at ' + s.idleMin + ')'),
           ),
+          // Feedback link — GitHub issues, so requests stay tracked in one
+          // place and the reporter gets notified on progress.
+          h('div', { className: 'oled-contact' },
+            'Found a bug or want a new feature? ',
+            h('a', {
+              href: 'https://github.com/domparent/OLEDCare/issues/new',
+              target: '_blank',
+              rel: 'noopener noreferrer',
+            }, 'Open an issue'),
+            ' — I read every one.',
+          ),
         )
       }
 
@@ -551,7 +581,7 @@ window.__ModuleLoader__.load({
         () => h(NapButton, null),
       )), 'oled-care: nap button slot')
       ctx.effect(() => slots.inject('settings.section', () => slots.register(
-        { name: 'settings.section', id: 'oled-care', order: 30, label: 'OLED Care' },
+        { name: 'settings.section', id: 'oled-care', order: 30, label: 'OLEDCare' },
         () => h(SettingsPage, null),
       )), 'oled-care: settings section slot')
     }

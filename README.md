@@ -32,7 +32,7 @@ From a local checkout:
 dsh plugin --profile web add /absolute/path/to/OledCare
 ```
 
-Then restart `dsh web` and reload the browser tab. Open **Settings → OLED Care** in the settings left nav.
+Then restart `dsh web` and reload the browser tab. Open **Settings → OLEDCare** in the settings left nav.
 
 No build step runs on install: `client.js` ships in the harness browser-module format exactly as the browser loads it, so GitHub installs work without allowlisting a `prepare` script.
 
